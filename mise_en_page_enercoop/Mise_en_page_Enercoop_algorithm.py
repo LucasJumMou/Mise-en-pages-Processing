@@ -64,7 +64,7 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
     # calling from the QGIS console.
 
     OUTPUT = 'OUTPUT'
-    INPUT = 'INPUT'
+    LAYOUT = 'LAYOUT'
     INPUT_VECTOR = 'INPUT_VECTOR'
     TYPE = 'TYPE'
     SELECT = 'SELECT'
@@ -132,7 +132,7 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterEnum(
-                self.INPUT,
+                self.LAYOUT,
                 self.tr('Selection de la mise en page'),
                 options=['Environnement', 'Localisation'],
                 allowMultiple=False
@@ -160,11 +160,19 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
 
         log = feedback.setProgressText
+        bar = feedback.setProgress
 
-        layout_option = self.parameterAsEnum(parameters, self.INPUT, context)
+        layout_option = self.parameterAsEnum(parameters, self.LAYOUT, context)
         type_option = self.parameterAsEnum(parameters, self.TYPE, context)
         select_option = self.parameterAsBool(parameters, self.SELECT, context)
         input_vector = self.parameterAsVectorLayer(parameters, self.INPUT_VECTOR, context)
+
+        if feedback.isCanceled():
+            return {}
+
+        log("Layer de couverture :")
+        log(input_vector.name())
+        log("Layer chargé")
 
         if layout_option == 0:
             layout_option = 'Environnement'
@@ -173,6 +181,10 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         else:
             layout_option = 'Environnement'
 
+        log("Mise en page :")
+        log(layout_option)
+        log("Mise en page chargé")
+
         if select_option == True:
             select_option = 'is_selected()'
         elif select_option == False:
@@ -180,6 +192,15 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         else:
             select_option = ''
 
+        log("Entités sélectionnées :")
+        log(layout_option)
+
+        bar(25)
+
+        if feedback.isCanceled():
+            return {}        
+
+        log("Début export")
         if type_option == 1:
             export_image = processing.run("native:atlaslayouttoimage",
                                         {'LAYOUT':layout_option,
@@ -195,7 +216,11 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
                                         'GEOREFERENCE':True,
                                         'INCLUDE_METADATA':True,
                                         'ANTIALIAS':True})
+            bar(100)
+            log("Fin export")
             return export_image
+        if feedback.isCanceled():
+            return {}
         elif type_option == 0:
             export_pdf = processing.run("native:atlaslayouttomultiplepdf",
                                         {'LAYOUT': layout_option,
@@ -215,5 +240,13 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
                                         'IMAGE_COMPRESSION': 0,
                                         'OUTPUT_FILENAME': '',
                                         'OUTPUT_FOLDER': self.OUTPUT})
+            bar(100)
+            log("Fin export")
             return export_pdf
-        else: ''
+        if feedback.isCanceled():
+            return {}
+        else: 
+            log("Fin export")    
+            ''
+        if feedback.isCanceled():
+            return {}
