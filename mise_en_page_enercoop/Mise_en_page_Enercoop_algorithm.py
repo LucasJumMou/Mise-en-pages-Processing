@@ -38,7 +38,10 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterEnum,
                        QgsProcessingParameterString,
-                       QgsProcessingParameterFolderDestination)
+                       QgsProcessingParameterFolderDestination,
+                       QgsProcessingParameterBoolean,
+                       QgsProcessingFeedback,
+                       QgsProcessingParameterVectorLayer)
 from qgis import processing
 
 
@@ -62,7 +65,9 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
 
     OUTPUT = 'OUTPUT'
     INPUT = 'INPUT'
+    INPUT_VECTOR = 'INPUT_VECTOR'
     TYPE = 'TYPE'
+    SELECT = 'SELECT'
 
     def name(self):
         """
@@ -109,9 +114,22 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         Here we define the inputs and output of the algorithm, along
         with some other properties.
         """
+        self.addParameter(
+            QgsProcessingParameterVectorLayer(
+                self.INPUT_VECTOR,
+                self.tr('Choose vector layer as input'),
+                [QgsProcessing.TypeVectorAnyGeometry]
+            )
+        )
 
-        # We add the input vector features source. It can have any kind of
-        # geometry.
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.SELECT,
+                self.tr('Traiter uniquement les entités sélectionnées')
+
+            )
+        )
+
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.INPUT,
@@ -132,9 +150,6 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
         self.addParameter(
             QgsProcessingParameterFolderDestination(
                 self.OUTPUT,
@@ -143,44 +158,14 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):
-        """
-        Here is where the processing itself takes place.
-        """
-        """
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.INPUT, context)
-        (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
-                context, source.fields(), source.wkbType(), source.sourceCrs())
 
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
+        log = feedback.setProgressText
 
-        for current, feature in enumerate(features):
-            # Stop the algorithm if cancel button has been clicked
-            if feedback.isCanceled():
-                break
+        layout_option = self.parameterAsEnum(parameters, self.INPUT, context)
+        type_option = self.parameterAsEnum(parameters, self.TYPE, context)
+        select_option = self.parameterAsBool(parameters, self.SELECT, context)
+        input_vector = self.parameterAsVectorLayer(parameters, self.INPUT_VECTOR, context)
 
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
-
-            # Update the progress bar
-            feedback.setProgress(int(current * total))
-
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
-        return {self.OUTPUT: dest_id}"""
-
-        layout_option = self.parameterAsEnumString(parameters, self.INPUT, context)
-        type_option = self.parameterAsEnumString(parameters, self.TYPE, context)
-        
         if layout_option == 0:
             layout_option = 'Environnement'
         elif layout_option == 1:
@@ -188,43 +173,47 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         else:
             layout_option = 'Environnement'
 
-        export_atlas_png = processing.run("native:atlaslayouttoimage",
-                                    {'LAYOUT':layout_option,
-                                    'COVERAGE_LAYER':None,
-                                    'FILTER_EXPRESSION':'is_selected()',
-                                    'SORTBY_EXPRESSION':'',
-                                    'SORTBY_REVERSE':False,
-                                    'FILENAME_EXPRESSION':"'output_'||@atlas_featurenumber",
-                                    'FOLDER':self.OUTPUT,
-                                    'LAYERS':None,
-                                    'EXTENSION':8,
-                                    'DPI':None,
-                                    'GEOREFERENCE':True,
-                                    'INCLUDE_METADATA':True,
-                                    'ANTIALIAS':True})
-        
-        export_atlas_pdf = processing.run("native:atlaslayouttomultiplepdf",
-                                    {'LAYOUT': layout_option,
-                                    'COVERAGE_LAYER': None,
-                                    'FILTER_EXPRESSION': 'is_selected()',
-                                    'SORTBY_EXPRESSION': '',
-                                    'SORTBY_REVERSE': False,
-                                    'LAYERS': None,
-                                    'DPI': None,
-                                    'FORCE_VECTOR': False,
-                                    'FORCE_RASTER': False,
-                                    'GEOREFERENCE': True,
-                                    'INCLUDE_METADATA': True,
-                                    'DISABLE_TILED': False,
-                                    'SIMPLIFY': True,
-                                    'TEXT_FORMAT': 0,
-                                    'IMAGE_COMPRESSION': 0,
-                                    'OUTPUT_FILENAME': '',
-                                    'OUTPUT_FOLDER': self.OUTPUT})
-
-        if type_option == 0:
-            return export_atlas_pdf
-        elif type_option ==  1:
-            return export_atlas_png
+        if select_option == True:
+            select_option = 'is_selected()'
+        elif select_option == False:
+            select_option = ''
         else:
-            return export_atlas_pdf        
+            select_option = ''
+
+        if type_option == 1:
+            export_image = processing.run("native:atlaslayouttoimage",
+                                        {'LAYOUT':layout_option,
+                                        'COVERAGE_LAYER':input_vector,
+                                        'FILTER_EXPRESSION':select_option,
+                                        'SORTBY_EXPRESSION':'',
+                                        'SORTBY_REVERSE':False,
+                                        'FILENAME_EXPRESSION':"'output_'||@atlas_featurenumber",
+                                        'FOLDER':self.OUTPUT,
+                                        'LAYERS':None,
+                                        'EXTENSION':8,
+                                        'DPI':None,
+                                        'GEOREFERENCE':True,
+                                        'INCLUDE_METADATA':True,
+                                        'ANTIALIAS':True})
+            return export_image
+        elif type_option == 0:
+            export_pdf = processing.run("native:atlaslayouttomultiplepdf",
+                                        {'LAYOUT': layout_option,
+                                        'COVERAGE_LAYER': input_vector,
+                                        'FILTER_EXPRESSION': select_option,
+                                        'SORTBY_EXPRESSION': '',
+                                        'SORTBY_REVERSE': False,
+                                        'LAYERS': None,
+                                        'DPI': None,
+                                        'FORCE_VECTOR': False,
+                                        'FORCE_RASTER': False,
+                                        'GEOREFERENCE': True,
+                                        'INCLUDE_METADATA': True,
+                                        'DISABLE_TILED': False,
+                                        'SIMPLIFY': True,
+                                        'TEXT_FORMAT': 0,
+                                        'IMAGE_COMPRESSION': 0,
+                                        'OUTPUT_FILENAME': '',
+                                        'OUTPUT_FOLDER': self.OUTPUT})
+            return export_pdf
+        else: ''
