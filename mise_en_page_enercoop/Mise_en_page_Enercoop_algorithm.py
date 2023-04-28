@@ -41,7 +41,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFolderDestination,
                        QgsProcessingParameterBoolean,
                        QgsProcessingFeedback,
-                       QgsProcessingParameterVectorLayer)
+                       QgsProcessingParameterVectorLayer,
+                       QgsProcessingParameterFile)
 from qgis import processing
 
 
@@ -63,11 +64,13 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    OUTPUT = 'OUTPUT'
-    LAYOUT = 'LAYOUT'
-    INPUT_VECTOR = 'INPUT_VECTOR'
-    TYPE = 'TYPE'
-    SELECT = 'SELECT'
+    EMPRISE = 'EMPRISE'
+    FILTRE = 'FILTRE'
+    THEMATIQUE = 'THEMATIQUE'
+    FORMAT_EXPORT = 'FORMAT_EXPORT'
+    OUTPUT_FOLDER = 'OUTPUT_FOLDER'
+    
+    
 
     def name(self):
         """
@@ -114,118 +117,144 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         Here we define the inputs and output of the algorithm, along
         with some other properties.
         """
+        # Parameter for the cover layer, it's a vector parameter
         self.addParameter(
             QgsProcessingParameterVectorLayer(
-                self.INPUT_VECTOR,
-                self.tr('Choose vector layer as input'),
+                self.EMPRISE,
+                self.tr('Couche de couverture :'),
                 [QgsProcessing.TypeVectorAnyGeometry]
             )
         )
 
+        # Parameter for the selected or not choice, it's a bool parameter
         self.addParameter(
             QgsProcessingParameterBoolean(
-                self.SELECT,
+                self.FILTRE,
                 self.tr('Traiter uniquement les entités sélectionnées')
 
             )
         )
 
+        # Parameter for the layout enum, it's a enum parameter
         self.addParameter(
             QgsProcessingParameterEnum(
-                self.LAYOUT,
-                self.tr('Selection de la mise en page'),
+                self.THEMATIQUE,
+                self.tr('Thématique :'),
                 options=['Environnement', 'Localisation'],
                 allowMultiple=False
 
             )
         )
 
+        # Parameter for the export format enum, it's a enum parameter
         self.addParameter(
             QgsProcessingParameterEnum(
-                self.TYPE,
-                self.tr('Type de document'),
+                self.FORMAT_EXPORT,
+                self.tr('Format de document :'),
                 options=['pdf', 'png'],
                 allowMultiple=False
 
             )
         )
 
+        # Parameter for output folder, it's a parameter File that act for folder
         self.addParameter(
-            QgsProcessingParameterFolderDestination(
-                self.OUTPUT,
-                self.tr('Dossier de sortie')
+            QgsProcessingParameterFile(
+                self.OUTPUT_FOLDER,
+                self.tr("Dossier de sortie :"),
+                behavior=QgsProcessingParameterFile.Folder
+                
             )
         )
+    
 
     def processAlgorithm(self, parameters, context, feedback):
 
+        # Create variables to check the progress with logs and progress bar
         log = feedback.setProgressText
         bar = feedback.setProgress
 
-        layout_option = self.parameterAsEnum(parameters, self.LAYOUT, context)
-        type_option = self.parameterAsEnum(parameters, self.TYPE, context)
-        select_option = self.parameterAsBool(parameters, self.SELECT, context)
-        input_vector = self.parameterAsVectorLayer(parameters, self.INPUT_VECTOR, context)
+        # Encapsulate all the above parameters in variables
+        emprise = self.parameterAsVectorLayer(parameters, self.EMPRISE, context)
+        filtre_couche = self.parameterAsBool(parameters, self.FILTRE, context)
+        thematique = self.parameterAsEnum(parameters, self.THEMATIQUE, context)
+        format_export = self.parameterAsEnum(parameters, self.FORMAT_EXPORT, context)
+        dossier_de_sortie = self.parameterAsFile(parameters, self.OUTPUT_FOLDER, context)
 
+        # Cancel the processing if the user click on "Annuler"
         if feedback.isCanceled():
             return {}
 
-        log("Layer de couverture :")
-        log(input_vector.name())
-        log("Layer chargé")
+        # Add information about the selected layer name in the log
+        log("Couche vecteur de couverture : " + emprise.name())
+        log("-------------------------------------------------------")
 
-        if layout_option == 0:
-            layout_option = 'Environnement'
-        elif layout_option == 1:
-            layout_option = 'Localisation'
+        # Condition to check the user choice in the thematique enum
+        if thematique == 0:
+            thematique = 'Environnement'
+        elif thematique == 1:
+            thematique = 'Localisation'
         else:
-            layout_option = 'Environnement'
+            thematique = 'Environnement'
 
-        log("Mise en page :")
-        log(layout_option)
-        log("Mise en page chargé")
+        # Add information about the selected layout name in the log
+        log("Mise en page : " + thematique)
+        log("-------------------------------------------------------")        
 
-        if select_option == True:
-            select_option = 'is_selected()'
-        elif select_option == False:
-            select_option = ''
+        # Condition to check the user choice in the selected bool
+        if filtre_couche == True:
+            filtre_couche = 'is_selected()'
+        elif filtre_couche == False:
+            filtre_couche = ''
         else:
-            select_option = ''
+            filtre_couche = ''
 
-        log("Entités sélectionnées :")
-        log(layout_option)
+        # Add information about if the layer have selected entities or not in the log
+        log("Entités sélectionnées : " + filtre_couche)
+        log("-------------------------------------------------------")
 
+        #Set the progress bar at 25% when all the above code is complete
         bar(25)
-
+        
+        # Cancel the processing if the user click on "Annuler"
         if feedback.isCanceled():
             return {}        
+        
+        # Add information about the beginning of the export
+        log("Début export ...")
 
-        log("Début export")
-        if type_option == 1:
+        # Condition to know which format the user want
+        if format_export == 1:
+        # Processing to run when png is selected
             export_image = processing.run("native:atlaslayouttoimage",
-                                        {'LAYOUT':layout_option,
-                                        'COVERAGE_LAYER':input_vector,
-                                        'FILTER_EXPRESSION':select_option,
+                                        {'LAYOUT':thematique,
+                                        'COVERAGE_LAYER':emprise,
+                                        'FILTER_EXPRESSION':filtre_couche,
                                         'SORTBY_EXPRESSION':'',
                                         'SORTBY_REVERSE':False,
                                         'FILENAME_EXPRESSION':"'output_'||@atlas_featurenumber",
-                                        'FOLDER':self.OUTPUT,
+                                        'FOLDER':dossier_de_sortie,
                                         'LAYERS':None,
                                         'EXTENSION':8,
                                         'DPI':None,
                                         'GEOREFERENCE':True,
                                         'INCLUDE_METADATA':True,
                                         'ANTIALIAS':True})
+            # Set the progress bar to 100% and log the end of the process
             bar(100)
             log("Fin export")
+            log("-------------------------------------------------------")
             return export_image
+        # Cancel the processing if the user click on "Annuler"        
         if feedback.isCanceled():
             return {}
-        elif type_option == 0:
+        
+        elif format_export == 0:
+        # Processing to run when pdf is selected
             export_pdf = processing.run("native:atlaslayouttomultiplepdf",
-                                        {'LAYOUT': layout_option,
-                                        'COVERAGE_LAYER': input_vector,
-                                        'FILTER_EXPRESSION': select_option,
+                                        {'LAYOUT': thematique,
+                                        'COVERAGE_LAYER': emprise,
+                                        'FILTER_EXPRESSION': filtre_couche,
                                         'SORTBY_EXPRESSION': '',
                                         'SORTBY_REVERSE': False,
                                         'LAYERS': None,
@@ -239,14 +268,19 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
                                         'TEXT_FORMAT': 0,
                                         'IMAGE_COMPRESSION': 0,
                                         'OUTPUT_FILENAME': '',
-                                        'OUTPUT_FOLDER': self.OUTPUT})
+                                        'OUTPUT_FOLDER': dossier_de_sortie})
+            # Set the progress bar to 100% and log the end of the process
             bar(100)
             log("Fin export")
+            log("-------------------------------------------------------")
             return export_pdf
+        # Cancel the processing if the user click on "Annuler"        
         if feedback.isCanceled():
             return {}
         else: 
-            log("Fin export")    
+            log("Fin export")   
+            log("-------------------------------------------------------") 
             ''
+        # Cancel the processing if the user click on "Annuler"
         if feedback.isCanceled():
             return {}
