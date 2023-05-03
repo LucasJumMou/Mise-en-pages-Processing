@@ -1,2 +1,2 @@
 # Mises-en-pages-Plugin
-Mises en pages automatique en plugin
+Mises en page automatique en plugin
