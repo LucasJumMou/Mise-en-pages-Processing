@@ -23,7 +23,7 @@
 """
 
 __author__ = 'Jumeau-Mousset Lucas'
-__date__ = '2023-04-26'
+__date__ = '2023-05-02'
 __copyright__ = '(C) 2023 by Jumeau-Mousset Lucas'
 
 # This will get replaced with a git SHA1 when you do a git archive
@@ -42,7 +42,10 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterBoolean,
                        QgsProcessingFeedback,
                        QgsProcessingParameterVectorLayer,
-                       QgsProcessingParameterFile)
+                       QgsProcessingParameterFile, 
+                       QgsLayoutPageCollection,
+                       QgsProcessingParameterLayout
+                       )
 from qgis import processing
 
 
@@ -67,10 +70,13 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
     EMPRISE = 'EMPRISE'
     FILTRE = 'FILTRE'
     THEMATIQUE = 'THEMATIQUE'
+    """Multiples enum that will allow the user to select the theme he wants"""
+    THEME = 'THEME'
     FORMAT_EXPORT = 'FORMAT_EXPORT'
     OUTPUT_FOLDER = 'OUTPUT_FOLDER'
     
     
+
 
     def name(self):
         """
@@ -122,9 +128,12 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterVectorLayer(
                 self.EMPRISE,
                 self.tr('Couche de couverture :'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+                [QgsProcessing.TypeVectorPolygon],
+                defaultValue="qualif_polygons"
+                
             )
         )
+
 
         # Parameter for the selected or not choice, it's a bool parameter
         self.addParameter(
@@ -135,24 +144,36 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # Parameter for the layout enum, it's a enum parameter
+        # Parameter for the layout , it's a layout parameter
+        self.addParameter(
+            QgsProcessingParameterLayout(
+                self.THEMATIQUE,
+                self.tr('Thématique voulue'),
+                
+            )
+        )
+
+        """#Parameter that allow the multiples selection of theme
         self.addParameter(
             QgsProcessingParameterEnum(
-                self.THEMATIQUE,
-                self.tr('Thématique :'),
-                options=['Environnement', 'Localisation'],
-                allowMultiple=False
+                self.THEME,
+                self.tr('Thème :'),
+                options=['Znieff', 'Natura 2000'],
+                allowMultiple=True
 
             )
         )
+        """                             
+        
 
         # Parameter for the export format enum, it's a enum parameter
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.FORMAT_EXPORT,
                 self.tr('Format de document :'),
-                options=['pdf', 'png'],
-                allowMultiple=False
+                options=['PDF', 'PNG'],
+                allowMultiple=False,
+                defaultValue="PDF"
 
             )
         )
@@ -177,7 +198,9 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         # Encapsulate all the above parameters in variables
         emprise = self.parameterAsVectorLayer(parameters, self.EMPRISE, context)
         filtre_couche = self.parameterAsBool(parameters, self.FILTRE, context)
-        thematique = self.parameterAsEnum(parameters, self.THEMATIQUE, context)
+        thematique = self.parameterAsString(parameters, self.THEMATIQUE, context)
+        """#Encapsulate the theme parameter in a variable
+        theme = self.parameterAsEnums(parameters, self.THEME, context)"""
         format_export = self.parameterAsEnum(parameters, self.FORMAT_EXPORT, context)
         dossier_de_sortie = self.parameterAsFile(parameters, self.OUTPUT_FOLDER, context)
 
@@ -189,13 +212,21 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         log("Couche vecteur de couverture : " + emprise.name())
         log("-------------------------------------------------------")
 
-        # Condition to check the user choice in the thematique enum
-        if thematique == 0:
-            thematique = 'Environnement'
-        elif thematique == 1:
-            thematique = 'Localisation'
+        
+        """#Condition to check the user choice in the theme enum
+                if thematique == 'Environnement' and theme == 0:
+            theme = 'Znieff'
+        elif thematique == 'Environnement' and theme == 1:
+            theme = 'Natura 2000'
         else:
-            thematique = 'Environnement'
+            theme = 'Znieff'"""
+
+
+        """#Condition to have specific page in environnement
+                if theme == 'Znieff':
+            thematique = QgsLayoutPageCollection.page(0)"""
+
+
 
         # Add information about the selected layout name in the log
         log("Mise en page : " + thematique)
