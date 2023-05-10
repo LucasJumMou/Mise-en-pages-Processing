@@ -44,7 +44,9 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterVectorLayer,
                        QgsProcessingParameterFile, 
                        QgsLayoutPageCollection,
-                       QgsProcessingParameterLayout
+                       QgsProcessingParameterLayout,
+                       QgsLayoutAtlas,
+                       QgsProject
                        )
 from qgis import processing
 
@@ -225,7 +227,15 @@ class Mise_en_page_EnercoopAlgorithm(QgsProcessingAlgorithm):
         """#Condition to have specific page in environnement
                 if theme == 'Znieff':
             thematique = QgsLayoutPageCollection.page(0)"""
+        # Set the coverage layer for layout
 
+        project = QgsProject.instance()
+        projectLayoutManager = project.layoutManager()
+        layout = projectLayoutManager.layoutByName(thematique)
+
+        QgsLayoutAtlas(layout).setCoverageLayer(emprise)
+
+        log(str(emprise))
 
 
         # Add information about the selected layout name in the log
